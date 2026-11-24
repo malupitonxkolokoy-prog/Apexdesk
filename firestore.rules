@@ -1,0 +1,229 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidMt5Account(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.label is string && data.label.size() >= 1 && data.label.size() <= 50 &&
+             data.brokerName is string && data.brokerName.size() >= 1 && data.brokerName.size() <= 80 &&
+             data.accountLogin is string && data.accountLogin.size() >= 1 && data.accountLogin.size() <= 40 &&
+             data.accountType in ['DEMO', 'LIVE'] &&
+             (!('bridgeUrl' in data) || (data.bridgeUrl is string && data.bridgeUrl.size() <= 300)) &&
+             data.currency is string && data.currency.size() >= 3 && data.currency.size() <= 6 &&
+             data.balance is number && data.balance >= 0 &&
+             data.equity is number && data.equity >= 0 &&
+             data.marginUsed is number && data.marginUsed >= 0 &&
+             data.leverage is int && data.leverage >= 1 && data.leverage <= 2000 &&
+             data.active is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRiskSettings(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.maxRiskPerTradePct is number && data.maxRiskPerTradePct >= 0.1 && data.maxRiskPerTradePct <= 25.0 &&
+             data.maxDailyLossPct is number && data.maxDailyLossPct >= 0.5 && data.maxDailyLossPct <= 50.0 &&
+             data.maxOpenPositions is int && data.maxOpenPositions >= 1 && data.maxOpenPositions <= 50 &&
+             data.minRiskRewardRatio is number && data.minRiskRewardRatio >= 0.5 && data.minRiskRewardRatio <= 10.0 &&
+             data.requireStopLoss is bool &&
+             data.requireBiometricForLive is bool &&
+             data.requireTwoFactorForLive is bool &&
+             data.disclaimerAccepted is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidJournalEntry(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.symbol is string && data.symbol.size() >= 1 && data.symbol.size() <= 20 &&
+             data.direction in ['BUY', 'SELL'] &&
+             data.accountType in ['DEMO', 'LIVE'] &&
+             data.entryPrice is number && data.entryPrice >= 0 &&
+             data.exitPrice is number && data.exitPrice >= 0 &&
+             data.stopLoss is number && data.stopLoss >= 0 &&
+             data.takeProfit is number && data.takeProfit >= 0 &&
+             data.lotSize is number && data.lotSize > 0 && data.lotSize <= 500 &&
+             data.pnlAmount is number &&
+             data.setupTag is string && data.setupTag.size() <= 60 &&
+             data.notes is string && data.notes.size() <= 1000 &&
+             data.emotion is string && data.emotion.size() <= 40 &&
+             data.status in ['OPEN', 'CLOSED', 'CANCELLED'] &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidAuditLog(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.eventType in [
+               'ACCOUNT_LINKED', 'RISK_UPDATED', 'AI_SIGNAL',
+               'RISK_CHECK_BLOCKED', 'ORDER_CONFIRMED', 'ORDER_EXECUTED',
+               'ORDER_CLOSED', 'DISCLAIMER_ACCEPTED'
+             ] &&
+             data.symbol is string && data.symbol.size() <= 20 &&
+             data.accountType in ['DEMO', 'LIVE', 'SYSTEM'] &&
+             data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 300 &&
+             data.metadataSummary is string && data.metadataSummary.size() <= 500 &&
+             data.biometricVerified is bool &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    match /users/{userId}/mt5_accounts/{accountId} {
+      allow get: if isOwner(userId) && isValidId(accountId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(accountId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'label', 'brokerName', 'accountLogin', 'accountType',
+                         'currency', 'balance', 'equity', 'marginUsed', 'leverage', 'active',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'label', 'brokerName', 'accountLogin', 'accountType',
+                         'bridgeUrl', 'currency', 'balance', 'equity', 'marginUsed', 'leverage',
+                         'active', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidMt5Account(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(accountId) &&
+                       isValidMt5Account(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().accountLogin == existing().accountLogin &&
+                       incoming().accountType == existing().accountType &&
+                       incoming().currency == existing().currency &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'label', 'brokerName', 'bridgeUrl', 'balance', 'equity',
+                         'marginUsed', 'leverage', 'active', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(accountId);
+    }
+
+    match /users/{userId}/risk_settings/{settingsId} {
+      allow get: if isOwner(userId) && isValidId(settingsId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(settingsId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'maxRiskPerTradePct', 'maxDailyLossPct', 'maxOpenPositions',
+                         'minRiskRewardRatio', 'requireStopLoss', 'requireBiometricForLive',
+                         'requireTwoFactorForLive', 'disclaimerAccepted', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'maxRiskPerTradePct', 'maxDailyLossPct', 'maxOpenPositions',
+                         'minRiskRewardRatio', 'requireStopLoss', 'requireBiometricForLive',
+                         'requireTwoFactorForLive', 'disclaimerAccepted', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidRiskSettings(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(settingsId) &&
+                       isValidRiskSettings(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'maxRiskPerTradePct', 'maxDailyLossPct', 'maxOpenPositions',
+                         'minRiskRewardRatio', 'requireStopLoss', 'requireBiometricForLive',
+                         'requireTwoFactorForLive', 'disclaimerAccepted', 'updatedAt'
+                       ]);
+
+      allow delete: if false;
+    }
+
+    match /users/{userId}/journal_entries/{entryId} {
+      allow get: if isOwner(userId) && isValidId(entryId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(entryId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'symbol', 'direction', 'accountType', 'entryPrice', 'exitPrice',
+                         'stopLoss', 'takeProfit', 'lotSize', 'pnlAmount', 'setupTag', 'notes',
+                         'emotion', 'status', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'symbol', 'direction', 'accountType', 'entryPrice', 'exitPrice',
+                         'stopLoss', 'takeProfit', 'lotSize', 'pnlAmount', 'setupTag', 'notes',
+                         'emotion', 'status', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidJournalEntry(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(entryId) &&
+                       isValidJournalEntry(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().symbol == existing().symbol &&
+                       incoming().direction == existing().direction &&
+                       incoming().accountType == existing().accountType &&
+                       incoming().entryPrice == existing().entryPrice &&
+                       incoming().lotSize == existing().lotSize &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (existing().status == 'OPEN' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'exitPrice', 'stopLoss', 'takeProfit', 'pnlAmount',
+                            'setupTag', 'notes', 'emotion', 'status', 'updatedAt'
+                          ])) ||
+                         (existing().status in ['CLOSED', 'CANCELLED'] &&
+                          incoming().status == existing().status &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'setupTag', 'notes', 'emotion', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(entryId);
+    }
+
+    match /users/{userId}/audit_logs/{logId} {
+      allow get: if isOwner(userId) && isValidId(logId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(logId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'eventType', 'symbol', 'accountType',
+                         'summary', 'metadataSummary', 'biometricVerified', 'createdAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'eventType', 'symbol', 'accountType',
+                         'summary', 'metadataSummary', 'biometricVerified', 'createdAt'
+                       ]) &&
+                       isValidAuditLog(incoming(), userId);
+
+      // Compliance audit trail is strictly append-only
+      allow update, delete: if false;
+    }
+  }
+}

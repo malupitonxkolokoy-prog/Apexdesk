@@ -1,0 +1,6 @@
+{
+  "name": "ApexDesk",
+  "description": "Professional MT5 trading assistant with multi-timeframe technical charting, Gemini AI trade setup scoring, strict risk controls, trade journal, and compliance audit logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

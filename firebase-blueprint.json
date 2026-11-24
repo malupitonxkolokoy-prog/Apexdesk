@@ -1,0 +1,118 @@
+{
+  "entities": {
+    "Mt5Account": {
+      "title": "Mt5Account",
+      "description": "Linked MetaTrader 5 account metadata (credentials/tokens are stored locally in Android Keystore, never in Firestore).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the account owner" },
+        "label": { "type": "string", "description": "Display label for the MT5 account" },
+        "brokerName": { "type": "string", "description": "Broker or server name" },
+        "accountLogin": { "type": "string", "description": "MT5 login identifier" },
+        "accountType": { "type": "string", "enum": ["DEMO", "LIVE"], "description": "Account classification" },
+        "bridgeUrl": { "type": "string", "description": "Optional HTTPS MetaTrader WebAPI / Bridge endpoint" },
+        "currency": { "type": "string", "description": "Account base currency (e.g. USD)" },
+        "balance": { "type": "number", "description": "Account balance" },
+        "equity": { "type": "number", "description": "Account equity" },
+        "marginUsed": { "type": "number", "description": "Margin currently allocated" },
+        "leverage": { "type": "integer", "description": "Account leverage ratio" },
+        "active": { "type": "boolean", "description": "Whether this account is currently selected" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": [
+        "userId", "label", "brokerName", "accountLogin", "accountType",
+        "currency", "balance", "equity", "marginUsed", "leverage", "active",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "RiskSettings": {
+      "title": "RiskSettings",
+      "description": "User-configured pre-trade risk limits and security controls.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "maxRiskPerTradePct": { "type": "number" },
+        "maxDailyLossPct": { "type": "number" },
+        "maxOpenPositions": { "type": "integer" },
+        "minRiskRewardRatio": { "type": "number" },
+        "requireStopLoss": { "type": "boolean" },
+        "requireBiometricForLive": { "type": "boolean" },
+        "requireTwoFactorForLive": { "type": "boolean" },
+        "disclaimerAccepted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "maxRiskPerTradePct", "maxDailyLossPct", "maxOpenPositions",
+        "minRiskRewardRatio", "requireStopLoss", "requireBiometricForLive",
+        "requireTwoFactorForLive", "disclaimerAccepted", "createdAt", "updatedAt"
+      ]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "Trade execution and post-trade review journal record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "symbol": { "type": "string" },
+        "direction": { "type": "string", "enum": ["BUY", "SELL"] },
+        "accountType": { "type": "string", "enum": ["DEMO", "LIVE"] },
+        "entryPrice": { "type": "number" },
+        "exitPrice": { "type": "number" },
+        "stopLoss": { "type": "number" },
+        "takeProfit": { "type": "number" },
+        "lotSize": { "type": "number" },
+        "pnlAmount": { "type": "number" },
+        "setupTag": { "type": "string" },
+        "notes": { "type": "string" },
+        "emotion": { "type": "string" },
+        "status": { "type": "string", "enum": ["OPEN", "CLOSED", "CANCELLED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "symbol", "direction", "accountType", "entryPrice", "exitPrice",
+        "stopLoss", "takeProfit", "lotSize", "pnlAmount", "setupTag", "notes",
+        "emotion", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Append-only compliance audit log of trade decisions, risk checks, and executions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "eventType": { "type": "string" },
+        "symbol": { "type": "string" },
+        "accountType": { "type": "string" },
+        "summary": { "type": "string" },
+        "metadataSummary": { "type": "string" },
+        "biometricVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "eventType", "symbol", "accountType",
+        "summary", "metadataSummary", "biometricVerified", "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/mt5_accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/Mt5Account" },
+      "description": "User-scoped MT5 account configurations"
+    },
+    "/users/{userId}/risk_settings/{settingsId}": {
+      "schema": { "$ref": "#/entities/RiskSettings" },
+      "description": "User-scoped risk management and security rules"
+    },
+    "/users/{userId}/journal_entries/{entryId}": {
+      "schema": { "$ref": "#/entities/JournalEntry" },
+      "description": "User-scoped trade journal records"
+    },
+    "/users/{userId}/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "User-scoped immutable compliance audit trail"
+    }
+  }
+}

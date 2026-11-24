@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<resources>
+    <string name="firestore_database_id" translatable="false">ai-studio-android-apexdesk-cdd8050e-594c-44a4-8f48-03e8869c1c0b</string>
+    <string name="recaptcha_site_key" translatable="false">6LfpHC8uAAAAANtw88zMrdjBPi_CN9pQjUoPimrv</string>
+</resources>
